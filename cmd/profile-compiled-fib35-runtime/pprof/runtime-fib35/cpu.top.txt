@@ -1,0 +1,36 @@
+File: main
+Type: cpu
+Time: 2026-04-03 21:12:19 CST
+Duration: 3.13s, Total samples = 2.37s (75.75%)
+Showing nodes accounting for 2.32s, 97.89% of 2.37s total
+Dropped 9 nodes (cum <= 0.01s)
+      flat  flat%   sum%        cum   cum%
+     0.60s 25.32% 25.32%      2.09s 88.19%  xex/engine.(*NonAsyncEvaluator).Eval
+     0.39s 16.46% 41.77%      0.44s 18.57%  xex/engine/compile.compileInfixExpression.func20
+     0.19s  8.02% 49.79%      0.19s  8.02%  runtime.pthread_cond_signal
+     0.19s  8.02% 57.81%      2.09s 88.19%  xex/engine.NonAsyncEvaluator.run
+     0.16s  6.75% 64.56%      2.09s 88.19%  xex/engine/compile.CompileSeq.func1
+     0.12s  5.06% 69.62%      0.18s  7.59%  xex/engine/compile.compileInfixExpression.func11
+     0.11s  4.64% 74.26%      0.11s  4.64%  runtime.duffcopy
+     0.11s  4.64% 78.90%      0.11s  4.64%  xex/engine/compile.compileNormalOperate.func2
+     0.07s  2.95% 81.86%      0.07s  2.95%  runtime.memclrNoHeapPointers
+     0.06s  2.53% 84.39%      0.06s  2.53%  xex/object.MinusOp
+     0.05s  2.11% 86.50%      0.17s  7.17%  xex/engine.(*SlotProvider).takeLocalSlot (inline)
+     0.05s  2.11% 88.61%      0.05s  2.11%  xex/object.EqualOp (inline)
+     0.04s  1.69% 90.30%      0.04s  1.69%  xex/object.UnBoxObjEnclosure[go.shape.*uint8]
+     0.03s  1.27% 91.56%      0.03s  1.27%  runtime.efaceeq
+     0.03s  1.27% 92.83%      0.12s  5.06%  runtime.memclrHasPointers
+     0.03s  1.27% 94.09%      0.23s  9.70%  runtime.notewakeup
+     0.03s  1.27% 95.36%      0.26s 10.97%  runtime.startm
+     0.03s  1.27% 96.62%      2.09s 88.19%  xex/engine/compile.compileInfixExpression.func9
+     0.02s  0.84% 97.47%      0.02s  0.84%  runtime.bulkBarrierPreWrite
+     0.01s  0.42% 97.89%      0.02s  0.84%  xex/object.PlusOp
+         0     0% 97.89%      0.02s  0.84%  main.main
+         0     0% 97.89%      0.02s  0.84%  main.main.Enclosure.GetCallable.func1 (inline)
+         0     0% 97.89%      0.27s 11.39%  runtime.gopreempt_m (inline)
+         0     0% 97.89%      0.27s 11.39%  runtime.goschedImpl
+         0     0% 97.89%      0.02s  0.84%  runtime.main
+         0     0% 97.89%      0.28s 11.81%  runtime.morestack
+         0     0% 97.89%      0.27s 11.39%  runtime.newstack
+         0     0% 97.89%      0.20s  8.44%  runtime.semawakeup
+         0     0% 97.89%      0.27s 11.39%  runtime.wakep
