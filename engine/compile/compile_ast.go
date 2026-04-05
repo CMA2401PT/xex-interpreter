@@ -59,8 +59,13 @@ func CompileSeq(seq lower_ast.SuffixOperatesSequence,
 				}
 				callOp := func(e engine.Env) object.Box {
 					fn := fnOp(e)
-					if fn.BasicType == object.BasicTypEnclosure {
-						return e.NonAsyncEvaluator.Eval(object.UnBoxObjEnclosure[*engine.Enclosure](fn), ops, e)
+					if fn.BasicType == object.BasicTypCustom {
+						custFn := object.UnBoxAny(fn)
+						if enc, ok := custFn.(*engine.Enclosure); ok {
+							return e.NonAsyncEvaluator.Eval(enc, ops, e)
+						} else if bind, ok := custFn.(*engine.EncolsureBind); ok {
+							return e.NonAsyncEvaluator.EvalWithThis(enc, bind.Self, ops, e)
+						}
 					}
 					args := make([]object.Box, len(ops))
 					for i, op := range ops {

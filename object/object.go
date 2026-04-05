@@ -27,7 +27,6 @@ const (
 	BasicTypStr
 	BasicTypObjList
 	BasicTypObjMap
-	BasicTypEnclosure
 	BasicTypCustom
 	BasicTypeType
 )
@@ -61,7 +60,7 @@ func Type(obj Box) TypeInfo {
 	switch obj.BasicType {
 	default:
 		panic(fmt.Errorf("should not happen: actual obj %T:%v", obj.aux, obj.aux))
-	case BasicTypNil, BasicTypBool, BasicTypInt, BasicTypStr, BasicTypObjList, BasicTypObjMap, BasicTypEnclosure, BasicTypeType:
+	case BasicTypNil, BasicTypBool, BasicTypInt, BasicTypStr, BasicTypObjList, BasicTypObjMap, BasicTypeType:
 		return TypeInfo{BasicType: obj.BasicType}
 	case BasicTypCustom:
 		if selfDesc, ok := obj.aux.(interface {
@@ -169,24 +168,6 @@ func UnBoxObjMap(obj Box) Map {
 func BoxObjMap(b Map) Box {
 	return Box{
 		BasicType: BasicTypObjMap,
-		aux:       b,
-	}
-}
-
-func UnBoxObjEnclosure[T any](obj Box) T {
-	if obj.BasicType != BasicTypEnclosure {
-		panic(fmt.Errorf("%v is not enclosure type", obj))
-	}
-	return obj.aux.(T)
-}
-
-func BoxObjEnclosure[T any](b T) Box {
-	// 强制确保符合 enclosure 签名
-	var i any
-	i = b
-	_ = i.(Enclosure)
-	return Box{
-		BasicType: BasicTypEnclosure,
 		aux:       b,
 	}
 }

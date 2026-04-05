@@ -158,65 +158,108 @@ func EvalEnclosureAsync(e *Enclosure, handle object.AsyncHandleType, args []obje
 				case OpTypeCall:
 					fn := env.AuxSlots[op.FnSlot]
 					resultSlot := op.FnSlot
-					if fn.BasicType == object.BasicTypEnclosure {
-						e = object.UnBoxObjEnclosure[*Enclosure](fn)
-						if e.NonAsync {
-							engineuator := newNonAsyncEvaluator()
-							engineuator.auxSlotsUsed = auxSlotsUsed
-							engineuator.reuseAuxSlots = reuseAuxSlots
-							engineuator.localSlotsUsed = localSlotsUsed
-							engineuator.resueLocalSlots = resueLocalSlots
-							newEnv := Env{
-								GlobalsAndImport:  env.GlobalsAndImport,
-								NonAsyncEvaluator: engineuator,
+					if fn.BasicType == object.BasicTypCustom {
+						couldBeObjFunction := object.UnBoxCustom(fn)
+						if e, ok := couldBeObjFunction.(*Enclosure); ok {
+							if e.NonAsync {
+								engineuator := newNonAsyncEvaluator()
+								engineuator.auxSlotsUsed = auxSlotsUsed
+								engineuator.reuseAuxSlots = reuseAuxSlots
+								engineuator.localSlotsUsed = localSlotsUsed
+								engineuator.resueLocalSlots = resueLocalSlots
+								newEnv := Env{
+									GlobalsAndImport:  env.GlobalsAndImport,
+									NonAsyncEvaluator: engineuator,
+								}
+								aops := []NormalSuffixOperate{}
+								for i := range op.ArgsEnd - op.ArgsStart {
+									v := env.AuxSlots[i+op.ArgsStart]
+									aops = append(aops, func(e Env) object.Box {
+										return v
+									})
+								}
+								env.AuxSlots[resultSlot] = engineuator.Eval(e, aops, newEnv)
+								pc += 1
+								continue
 							}
-							aops := []NormalSuffixOperate{}
+
+							oldEnv := env
+							// 保存当前帧
+							frames = append(frames, frame{
+								pc:               pc + 1, // 返回时执行下一个指令
+								resultSlot:       int(resultSlot),
+								ops:              ops,
+								LocalAndFreeVars: oldEnv.LocalAndFreeVars,
+								AuxSlots:         oldEnv.AuxSlots,
+							})
+							// 转到新的帧
+							updateEnv(e)
 							for i := range op.ArgsEnd - op.ArgsStart {
-								v := env.AuxSlots[i+op.ArgsStart]
-								aops = append(aops, func(e Env) object.Box {
-									return v
-								})
+								env.LocalAndFreeVars[i] = object.RefOrValue{Value: oldEnv.AuxSlots[i+op.ArgsStart]}
 							}
-							env.AuxSlots[resultSlot] = engineuator.Eval(e, aops, newEnv)
-							pc += 1
+							ops = e.OperationsAsync
+							pc = 0
+							continue
+						} else if ebind, ok := couldBeObjFunction.(*EncolsureBind); ok {
+							if ebind.Enc.NonAsync {
+								engineuator := newNonAsyncEvaluator()
+								engineuator.auxSlotsUsed = auxSlotsUsed
+								engineuator.reuseAuxSlots = reuseAuxSlots
+								engineuator.localSlotsUsed = localSlotsUsed
+								engineuator.resueLocalSlots = resueLocalSlots
+								newEnv := Env{
+									GlobalsAndImport:  env.GlobalsAndImport,
+									NonAsyncEvaluator: engineuator,
+								}
+								aops := []NormalSuffixOperate{}
+								for i := range op.ArgsEnd - op.ArgsStart {
+									v := env.AuxSlots[i+op.ArgsStart]
+									aops = append(aops, func(e Env) object.Box {
+										return v
+									})
+								}
+								env.AuxSlots[resultSlot] = engineuator.EvalWithThis(ebind.Enc, ebind.Self, aops, newEnv)
+								pc += 1
+								continue
+							}
+
+							oldEnv := env
+							// 保存当前帧
+							frames = append(frames, frame{
+								pc:               pc + 1, // 返回时执行下一个指令
+								resultSlot:       int(resultSlot),
+								ops:              ops,
+								LocalAndFreeVars: oldEnv.LocalAndFreeVars,
+								AuxSlots:         oldEnv.AuxSlots,
+							})
+							// 转到新的帧
+							updateEnv(ebind.Enc)
+							env.LocalAndFreeVars[0] = object.RefOrValue{Value: ebind.Self}
+							for i := range op.ArgsEnd - op.ArgsStart {
+								env.LocalAndFreeVars[i+1] = object.RefOrValue{Value: oldEnv.AuxSlots[i+op.ArgsStart]}
+							}
+							ops = ebind.Enc.OperationsAsync
+							pc = 0
 							continue
 						}
-
-						oldEnv := env
-						// 保存当前帧
-						frames = append(frames, frame{
-							pc:               pc + 1, // 返回时执行下一个指令
-							resultSlot:       int(resultSlot),
-							ops:              ops,
-							LocalAndFreeVars: oldEnv.LocalAndFreeVars,
-							AuxSlots:         oldEnv.AuxSlots,
-						})
-						// 转到新的帧
-						updateEnv(e)
-						for i := range op.ArgsEnd - op.ArgsStart {
-							env.LocalAndFreeVars[i] = object.RefOrValue{Value: oldEnv.AuxSlots[i+op.ArgsStart]}
-						}
-						ops = e.OperationsAsync
-						pc = 0
-					} else {
-						args := env.AuxSlots[op.ArgsStart:op.ArgsEnd]
-						asyncFn, ok := object.TryGetAsyncCallable(fn)
-						if ok {
-							taskDelegate := async.YieldByAwait[[]object.Box, object.Box]{
-								Target: asyncFn,
-								Args:   args,
-								Shim:   func(ret object.Box) []object.Box { return []object.Box{ret} },
-							}
-							pc += 1
-							return taskDelegate.SuspendAndYield(handle.Resume, func(newHandle object.AsyncHandleType, args []object.Box) object.AsyncYieldReason {
-								env.AuxSlots[resultSlot] = args[0]
-								return run(newHandle)
-							})
-						}
-						env.AuxSlots[resultSlot] = object.GetCallable(fn)(args)
-						pc += 1
-						continue
 					}
+					args := env.AuxSlots[op.ArgsStart:op.ArgsEnd]
+					asyncFn, ok := object.TryGetAsyncCallable(fn)
+					if ok {
+						taskDelegate := async.YieldByAwait[[]object.Box, object.Box]{
+							Target: asyncFn,
+							Args:   args,
+							Shim:   func(ret object.Box) []object.Box { return []object.Box{ret} },
+						}
+						pc += 1
+						return taskDelegate.SuspendAndYield(handle.Resume, func(newHandle object.AsyncHandleType, args []object.Box) object.AsyncYieldReason {
+							env.AuxSlots[resultSlot] = args[0]
+							return run(newHandle)
+						})
+					}
+					env.AuxSlots[resultSlot] = object.GetCallable(fn)(args)
+					pc += 1
+					continue
 				}
 			}
 		}

@@ -129,66 +129,6 @@ type Env struct {
 	*NonAsyncEvaluator
 }
 
-type Enclosure struct {
-	// 代表这个函数参数数量
-	ParametersCount int
-	// 代表这个函数局部变量(参数也算作局部变量的一部分)和Free变量总的槽位数
-	// Parameters 在最前面
-	LocalCount        int
-	LocalAndFreeCount int
-	// 代表在同步模式下这个函数需要的最大辅助栈大小
-	AuxStackSizeNonAsync int
-	// 代表在异步模式下这个函数需要的最大辅助栈大小
-	AuxStackSizeAsync int
-	// 从外部捕获的 Free 变量
-	Captures []object.RefOrValue
-	// 和外部共享的 GlobalsAndImport
-	GlobalsAndImport []object.Box
-	// 代表这个函数从CFG转换而来的混合操作队列
-	// 但是这里假设不是异步函数
-	OperationsNonAsync []HybirdOperation
-	// 但是这里假设是异步函数
-	OperationsAsync []HybirdOperation
-	NonAsync        bool
-}
-
-// 用于 object.Box 辨认 Enclosure 的标识
-func (e *Enclosure) EnclosureObj() {}
-
-// GetCallable 本质上是假设这个是普通函数，自己且底层函数都是普通函数
-func (e Enclosure) GetCallable() object.NormalHostFn {
-	return func(args []object.Box) object.Box {
-		if e.ParametersCount != len(args) {
-			panic(fmt.Errorf("expect %v args, but get %v args", e.ParametersCount, len(args)))
-		}
-		localAndFrees := append(make([]object.RefOrValue, e.LocalCount), e.Captures...)
-		auxSlot := make([]object.Box, e.AuxStackSizeNonAsync)
-		for i := range e.LocalCount {
-			if i < e.ParametersCount {
-				localAndFrees[i] = object.RefOrValue{Value: args[i]}
-			}
-		}
-		ne := newNonAsyncEvaluator()
-		env := Env{
-			GlobalsAndImport:  e.GlobalsAndImport,
-			LocalAndFreeVars:  localAndFrees,
-			AuxSlots:          auxSlot,
-			NonAsyncEvaluator: ne,
-		}
-
-		ops := e.OperationsNonAsync
-		ret := ne.run(env, ops)
-		return ret
-	}
-}
-
-// GetCallable 本质上是假设这个是异步函数，自己且底层函数都可能是异步函数
-func (e Enclosure) GetAsyncCallable() object.AsyncHostFn {
-	return func(handle object.AsyncHandleType, args []object.Box) object.AsyncYieldReason {
-		return EvalEnclosureAsync(&e, handle, args)
-	}
-}
-
 type SlotProvider struct {
 	resueLocalSlots []object.RefOrValue
 	localSlotsUsed  int
@@ -267,6 +207,36 @@ func (ne *NonAsyncEvaluator) Eval(e *Enclosure, args []NormalSuffixOperate, oute
 	// append(make([]*object.Cell, e.LocalCount), e.Captures...)
 	for i := range e.ParametersCount {
 		localAndFrees[i] = object.RefOrValue{Value: args[i](outerE)}
+	}
+	for offset, c := range e.Captures {
+		localAndFrees[offset+int(e.LocalCount)] = c
+	}
+	outerE.LocalAndFreeVars = localAndFrees
+	outerE.AuxSlots = auxSlot
+	ops := e.OperationsNonAsync
+	ret := ne.run(outerE, ops)
+	return ret
+}
+
+func (ne *NonAsyncEvaluator) EvalWithThis(e *Enclosure, this object.Box, args []NormalSuffixOperate, outerE Env) object.Box {
+	if e.ParametersCount != len(args)+1 {
+		panic(fmt.Errorf("expect %v args, but get %v+1 args", e.ParametersCount, len(args)))
+	}
+	var auxSlot []object.Box
+	var localAndFrees []object.RefOrValue
+	localAndFreeSize := int(e.LocalAndFreeCount)
+	if localAndFreeSize > 0 {
+		localAndFrees = ne.takeLocalSlot(localAndFreeSize)
+		defer ne.putLocalSlot(localAndFreeSize)
+	}
+	if e.AuxStackSizeNonAsync > 0 {
+		auxSlot = ne.takeAuxSlot(int(e.AuxStackSizeNonAsync))
+		defer ne.putAuxSlot(int(e.AuxStackSizeNonAsync))
+	}
+	// 插入 self/this
+	localAndFrees[0] = object.RefOrValue{Value: this}
+	for i := range e.ParametersCount {
+		localAndFrees[i+1] = object.RefOrValue{Value: args[i](outerE)}
 	}
 	for offset, c := range e.Captures {
 		localAndFrees[offset+int(e.LocalCount)] = c

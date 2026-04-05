@@ -35,11 +35,6 @@ func UnBoxLit(box Box) any {
 	}
 }
 
-// object.Box 辨认 Enclosure 的标识
-type Enclosure interface {
-	EnclosureObj()
-}
-
 func BoxAny(a any) Box {
 	switch v := a.(type) {
 	default:
@@ -56,8 +51,6 @@ func BoxAny(a any) Box {
 		return BoxList(v)
 	case Map:
 		return BoxMap(v)
-	case Enclosure:
-		return BoxObjEnclosure(v)
 	}
 }
 
@@ -77,7 +70,5 @@ func UnBoxAny(box Box) any {
 		return UnBoxObjList(box)
 	case BasicTypObjMap:
 		return UnBoxObjMap(box)
-	case BasicTypEnclosure:
-		return box.aux
 	}
 }

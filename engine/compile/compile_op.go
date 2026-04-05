@@ -160,7 +160,7 @@ func compileNormalOperate(
 				}
 				captures[localSlot] = slot
 			}
-			return object.BoxObjEnclosure(compiledFp.ToEnclosure(e.GlobalsAndImport, captures))
+			return object.BoxCustom(compiledFp.ToEnclosure(e.GlobalsAndImport, captures))
 		}, specialCase{}
 	}
 }
